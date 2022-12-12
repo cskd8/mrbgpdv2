@@ -1,12 +1,16 @@
 use anyhow::{Context, Result};
 use tokio::net::{TcpListener, TcpStream};
+use bytes::{BufMut, BytesMut};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 
 use crate::config::{Config, Mode};
 use crate::error::CreateConnectionError;
+use crate::packets::message::Message;
 
 #[derive(Debug)]
 pub struct Connection {
     conn: TcpStream,
+    buffer: BytesMut,
 }
 
 impl Connection {
@@ -15,9 +19,15 @@ impl Connection {
     ) -> Result<Self, CreateConnectionError> {
         let conn = match config.mode {
             Mode::Active => Self::connect_to_remote_peer(config).await,
-            Mode::Passive => Self::connect_to_local_peer(config).await,
+            Mode::Passive => Self::wait_connection_from_remote_peer(config).await,
         }?;
-        Ok(Self { conn })
+        let buffer = BytesMut::with_capacity(1500);
+        Ok(Self { conn, buffer })
+    }
+
+    pub async fn send(&mut self, message: Message) {
+        let bytes: BytesMut = message.into();
+        self.conn.write_all(&bytes[..]).await;
     }
 
     async fn connect_to_remote_peer(config: &Config) -> Result<TcpStream> {
@@ -28,7 +38,7 @@ impl Connection {
             .context(format!("cannot connect to remote peer {0}:{1}", config.remote_ip, bgp_port))
     }
 
-    async fn connect_to_local_peer(config: &Config) -> Result<TcpStream> {
+    async fn wait_connection_from_remote_peer(config: &Config) -> Result<TcpStream> {
         let bgp_port = 179;
 
         let listener = TcpListener::bind((config.local_ip, bgp_port))

@@ -5,6 +5,7 @@ use crate::event::Event;
 use crate::event_queue::EventQueue;
 use crate::state::State;
 use crate::connection::Connection;
+use crate::packets::message::Message;
 
 #[derive(Debug)]
 pub struct Peer {
@@ -48,7 +49,7 @@ impl Peer {
                     Event::ManualStart => {
                         self.tcp_connection = Connection::connect(&self.config).await.ok();
                         if self.tcp_connection.is_some() {
-                            self.event_queue.enqueue(Event::TcpConnectionEstablished);
+                            self.event_queue.enqueue(Event::TcpConnectionConfirmed);
                         } else {
                             panic!("TCP connection is failed. {:?}", self.config);
                         }
@@ -56,6 +57,20 @@ impl Peer {
                     }
                     _ => {}
                 }
+            }
+            State::Connect => match event {
+                Event::TcpConnectionConfirmed => {
+                    self.tcp_connection
+                        .as_mut()
+                        .expect("tcp_connection is not established.")
+                        .send(Message::new_open(
+                            self.config.local_as,
+                            self.config.local_ip,
+                        ))
+                        .await;
+                    self.state = State::OpenSent
+                },
+                _ => {}
             }
             _ => {}
         }
@@ -70,7 +85,7 @@ mod tests {
     #[tokio::test]
     async fn peer_can_transition_to_connect_state() {
         let config: Config = "64512 127.0.0.1 65413 127.0.0.2 active".parse().unwrap();
-        let mut peer = Peer::new(config);
+        let mut peer: Peer = Peer::new(config);
         peer.start();
 
         tokio::spawn(async move {
@@ -83,5 +98,25 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(1)).await;
         peer.next().await;
         assert_eq!(peer.state, State::Connect);
+    }
+
+    #[tokio::test]
+    async fn peer_can_transition_to_open_sent_state() {
+        let config: Config = "64512 127.0.0.1 65413 127.0.0.2 active".parse().unwrap();
+        let mut peer: Peer = Peer::new(config);
+        peer.start();
+
+        tokio::spawn(async move {
+            let remote_config: Config = "64513 127.0.0.2 65412 127.0.0.1 passive".parse().unwrap();
+            let mut remote_peer: Peer = Peer::new(remote_config);
+            remote_peer.start();
+            remote_peer.next().await;
+            remote_peer.next().await;
+        });
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        peer.next().await;
+        peer.next().await;
+        assert_eq!(peer.state, State::OpenSent);
     }
 }

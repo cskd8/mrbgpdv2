@@ -2,4 +2,5 @@
 pub enum Event {
     ManualStart,
     TcpConnectionEstablished,
+    TcpConnectionConfirmed,
 }
