@@ -11,4 +11,6 @@ else
     printf "\e[31m%s\e[m\n" "Tests failed"
 fi
 
+docker-compose -f ./tests/docker-compose.yml down
+
 exit $TEST_RESULT
