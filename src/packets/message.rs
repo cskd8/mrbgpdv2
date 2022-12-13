@@ -7,6 +7,7 @@ use crate::packets::open::OpenMessage;
 use crate::bgp_type::AutonomousSystemNumber;
 use crate::packets::header::{Header, MessageType};
 
+#[derive(Debug)]
 pub enum Message {
     Open(OpenMessage),
 }
@@ -15,7 +16,6 @@ impl TryFrom<BytesMut> for Message {
     type Error = ConvertBytesToBgpMessageError;
 
     fn try_from(bytes: BytesMut) -> Result<Self, Self::Error> {
-        todo!();
         let header_bytes_length = 19;
         if bytes.len() < header_bytes_length {
             return Err(Self::Error::from(anyhow::anyhow!("bytes length is too short")));
