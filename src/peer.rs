@@ -93,6 +93,9 @@ impl Peer {
             Message::Open(open) => {
                 self.event_queue.enqueue(Event::BgpOpen(open));
             }
+            Message::Keepalive(keepalive) => {
+                self.event_queue.enqueue(Event::KeepAliveMsg(keepalive));
+            }
         }
     }
 }
